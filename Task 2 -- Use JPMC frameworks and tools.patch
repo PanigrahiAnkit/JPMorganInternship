@@ -1,0 +1,161 @@
+diff --git a/App.tsx b/App.tsx
+new file mode 100644
+index 0000000..346ad5d
+--- /dev/null
++++ b/App.tsx
+@@ -0,0 +1,71 @@
++import React, { Component } from 'react';
++import './App.css';
++import Graph from './Graph';
++import DataStreamer, { ServerRespond } from './DataStreamer';
++
++/**
++ * State declaration for <App />
++ */
++interface IState {
++  data: ServerRespond[],
++  showGraph: boolean,
++}
++
++/**
++ * The parent element of the react app.
++ * It renders title, button and Graph react element.
++ */
++class App extends Component<{}, IState> {
++  constructor(props: {}) {
++    super(props);
++
++    this.state = {
++      data: [],
++      showGraph: false,
++    };
++  }
++
++  /**
++   * Render Graph react component with state.data parse as property data
++   */
++  renderGraph() {
++    if (this.state.showGraph) {
++      return (<Graph data={this.state.data} />);
++    }
++  }
++
++  /**
++   * Get new data from server and update the state with the new data
++   */
++  getDataFromServer() {
++    let x = 0;
++    const interval = setInterval(() => {
++      DataStreamer.getData((serverResponds: ServerRespond[]) => {
++        this.setState({
++          data: serverResponds,
++          showGraph: true,
++        });
++      });
++      x++;
++      if (x > 1000) {
++        clearInterval(interval);
++      }
++    }, 100);
++  }
++
++  /**
++   * Render the app
++   */
++  render() {
++    return (
++      <div className="App">
++        <header className="App-header">
++          <h1>Stock Price Monitor</h1>
++        </header>
++        <div className="App-content">
++          <button onClick={() => { this.getDataFromServer() }}>
++            Start Streaming Data
++          </button>
++          {this.renderGraph()}
++        </div>
++      </div>
++    )
++  }
++}
++
++export default App;
+diff --git a/Graph.tsx b/Graph.tsx
+new file mode 100644
+index 0000000..346ad5d
+--- /dev/null
++++ b/Graph.tsx
+@@ -0,0 +1,83 @@
++import React, { Component } from 'react';
++import { Table } from '@finos/perspective';
++import { ServerRespond } from './DataStreamer';
++
++/**
++ * Interface for props passed to <Graph />
++ */
++interface IProps {
++  data: ServerRespond[],
++}
++
++/**
++ * Perspective library adds load to HTMLElement prototype.
++ * This interface acts as a wrapper for Typescript compiler.
++ */
++interface PerspectiveViewerElement extends HTMLElement {
++  load: (table: Table) => void,
++}
++
++/**
++ * React component that renders the graph using Perspective
++ */
++class Graph extends Component<IProps, {}> {
++  table: Table | undefined;
++
++  render() {
++    return (
++      <perspective-viewer></perspective-viewer>
++    );
++  }
++
++  componentDidMount() {
++    console.log('rendering');
++    // Get element to attach the table from the DOM.
++    const elem = document.getElementsByTagName('perspective-viewer')[0] as unknown as PerspectiveViewerElement;
++
++    const schema = {
++      stock: 'string',
++      top_ask_price: 'float',
++      top_bid_price: 'float',
++      timestamp: 'date',
++    };
++
++    if (window.perspective) {
++      this.table = window.perspective.worker().table(schema);
++    }
++    if (this.table) {
++      console.log('change table');
++      // Load the `table` in the `<perspective-viewer>` DOM reference.
++      elem.load(this.table);
++      elem.setAttribute('view', 'y_line');
++      elem.setAttribute('column-pivots', '["stock"]');
++      elem.setAttribute('row-pivots', '["timestamp"]');
++      elem.setAttribute('columns', '["top_ask_price"]');
++      elem.setAttribute('aggregates', '{"stock":"distinct count","top_ask_price":"avg","top_bid_price":"avg","timestamp":"distinct count"}');
++    }
++  }
++
++  componentDidUpdate() {
++    if (this.table) {
++      this.table.update([
++        {
++          stock: this.props.data[0].stock,
++          top_ask_price: this.props.data[0].top_ask && this.props.data[0].top_ask.price || 0,
++          top_bid_price: this.props.data[0].top_bid && this.props.data[0].top_bid.price || 0,
++          timestamp: this.props.data[0].timestamp,
++        },
++      ]);
++    }
++  }
++}
++
++export default Graph;
